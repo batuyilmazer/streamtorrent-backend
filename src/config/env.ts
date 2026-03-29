@@ -47,4 +47,9 @@ export const env = {
     email: req("ADMIN_EMAIL"),
     password: req("ADMIN_PASSWORD"),
   },
+
+  allowedOrigins: (process.env.ALLOWED_ORIGINS ?? "")
+    .split(",")
+    .map((o) => o.trim())
+    .filter(Boolean),
 };

@@ -12,7 +12,11 @@ export function globalErrorHandler(
   res: Response,
   next: NextFunction
 ) {
-  console.log(err);
+  if (process.env.NODE_ENV !== "production") {
+    console.log(err);
+  } else {
+    console.log(`[error] ${err.name}: ${err.message}`);
+  }
   if (err instanceof ZodError) {
     return res.status(400).json({
       error: "VALIDATION_ERROR",
@@ -22,7 +26,7 @@ export function globalErrorHandler(
   if (err instanceof HttpError) {
     return res
       .status(err.statusCode)
-      .json({ Error: err.code, message: err.message });
+      .json({ error: err.code, message: err.message });
   }
   return res.status(500).json({ error: "INTERNAL_SERVER_ERROR" });
 }

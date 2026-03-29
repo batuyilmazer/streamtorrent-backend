@@ -2,6 +2,7 @@ import express from "express";
 import type { Request, Response } from "express";
 import cookieParser from "cookie-parser";
 import cors from "cors";
+import helmet from "helmet";
 import {
   notFoundHandler,
   globalErrorHandler,
@@ -9,18 +10,17 @@ import {
 import authRouter from "./modules/auth/auth.routes.js";
 import meRouter from "./modules/auth/meRoutes/me.routes.js";
 import fileRouter from "./modules/files/file.routes.js";
+import torrentsRouter from "./modules/torrents/torrents.routes.js";
+import { env } from "./config/env.js";
 
 const server = express();
 
-const allowedOrigins = [
-  "https://film.bira.pizza",
-  "https://streamtorrent-backend-43c4i.ondigitalocean.app",
-];
+server.use(helmet());
 
 server.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (!origin || env.allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
         callback(new Error("Not allowed by CORS"));
@@ -41,6 +41,7 @@ server.get("/", (req: Request, res: Response) => {
 server.use("/auth", authRouter);
 server.use("/me", meRouter);
 server.use("/files", fileRouter);
+server.use("/api/torrents", torrentsRouter);
 
 server.use(notFoundHandler);
 server.use(globalErrorHandler);

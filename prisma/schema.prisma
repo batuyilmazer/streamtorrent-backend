@@ -80,3 +80,17 @@ model File {
   userId    String?
   user      User?       @relation(fields: [userId], references: [id])
 }
+
+model Torrent {
+  id            String   @id @default(cuid())
+  infoHash      String   @unique
+  name          String
+  magnetUri     String?
+  torrentFile   Bytes?
+  size          BigInt
+  fileList      Json
+  isAdminPinned Boolean  @default(false)
+  addedBy       String?
+  createdAt     DateTime @default(now())
+  lastSeenAt    DateTime @default(now())
+}

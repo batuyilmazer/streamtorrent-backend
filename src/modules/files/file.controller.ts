@@ -56,11 +56,12 @@ export async function confirmUpload(req: Request, res: Response) {
   }
 
   // 3. Move from temp to final
-  // Current key is e.g. "temp/profile-photos/..."
-  if (!key.startsWith("temp/")) {
-    throw HttpError.badRequest("Invalid key format: expected temp key");
+  // Key must be a safe temp path: no path traversal characters allowed.
+  const VALID_TEMP_KEY = /^temp\/[a-zA-Z0-9/_.-]+$/;
+  if (!VALID_TEMP_KEY.test(key)) {
+    throw HttpError.badRequest("Invalid key format.");
   }
-  const finalKey = key.replace("temp/", "");
+  const finalKey = key.slice(5); // remove leading "temp/"
 
   await storageService.move(key, finalKey);
 
