@@ -2,51 +2,40 @@ import { Worker, Job, UnrecoverableError } from "bullmq";
 import { env } from "../../config/env.js";
 import { Redis as IORedis } from "ioredis";
 import { type BulkEmailJob, addBulkEmailJob } from "./bulkmailService.js";
-import { sendEmail } from "./aws.ses.js";
+import { sendEmail } from "./smtp.js";
 import { renderTemplate } from "./templates/template.loader.js";
 
 const connection = new IORedis(env.redis.url, {
   maxRetriesPerRequest: null,
 });
 
-const SES_ERROR_CATEGORIES = {
+const SMTP_ERROR_CATEGORIES = {
   // Yeniden denenebilir (Requeue)
   RETRYABLE: [
-    "Throttling",
-    "ThrottlingException",
-    "RequestTimeout",
-    "ServiceUnavailable",
-    "InternalFailure",
-    "TooManyRequestsException",
     "ECONNRESET",
     "ETIMEDOUT",
-    "TransientFailure", // Added SES specific status
+    "ECONNREFUSED",
+    "ESOCKET",
+    "ECONNECTION",
   ],
   // Kullanıcıyı kara listeye al (Blacklist)
   BLACKLIST: [
-    "InvalidParameterValue", // E-posta formatı bozuk
-    "MessageRejected", // İçerik veya domain reddedildi
-    "AccountThrottled", // Bu genellikle kalıcı bir sınıra takıldığını gösterir
-    "MailboxUnavailable", // Bazen kalıcı olabilir, duruma göre
-    "ConfigurationSetSendingPaused",
-    "AccountSendingPaused",
+    "EENVELOPE", // Bad recipient address
+    "EMESSAGE",  // Message content rejected
   ],
   // Kod/Sistem hatası (Fatal - Kuyruğu durdur veya logla)
   FATAL: [
-    "TemplateDoesNotExist",
-    "AccessDeniedException",
-    "ConfigurationSetDoesNotExist",
-    "InvalidRenderingParameterException",
-    "MissingCustomVerificationEmailTemplateException",
+    "EAUTH",    // Authentication failure
+    "ENOTSUPP", // Feature not supported
   ],
 };
 
 function getErrorCategory(
   errorName: string,
 ): "RETRYABLE" | "BLACKLIST" | "FATAL" | "UNKNOWN" {
-  if (SES_ERROR_CATEGORIES.RETRYABLE.includes(errorName)) return "RETRYABLE";
-  if (SES_ERROR_CATEGORIES.BLACKLIST.includes(errorName)) return "BLACKLIST";
-  if (SES_ERROR_CATEGORIES.FATAL.includes(errorName)) return "FATAL";
+  if (SMTP_ERROR_CATEGORIES.RETRYABLE.includes(errorName)) return "RETRYABLE";
+  if (SMTP_ERROR_CATEGORIES.BLACKLIST.includes(errorName)) return "BLACKLIST";
+  if (SMTP_ERROR_CATEGORIES.FATAL.includes(errorName)) return "FATAL";
   return "UNKNOWN";
 }
 
@@ -69,7 +58,7 @@ export const emailWorker = new Worker<BulkEmailJob>(
             to: d.destination,
             subject,
             html,
-            from: from || env.aws.ses.senderEmail,
+            from: from || env.smtp.from,
             ...(replyTo ? { replyTo } : {}),
           });
 
@@ -84,12 +73,10 @@ export const emailWorker = new Worker<BulkEmailJob>(
           if (category === "RETRYABLE") {
             retryDestinations.push(d);
           } else if (category === "BLACKLIST") {
-            // Log blacklist
             console.error(
               `Email to ${d.destination} failed with BLACKLIST error: ${errorName}`,
             );
           } else if (category === "FATAL") {
-            // Log fatal
             console.error(
               `Email to ${d.destination} failed with FATAL error: ${errorName}`,
             );
@@ -106,7 +93,7 @@ export const emailWorker = new Worker<BulkEmailJob>(
                 html: `<p>An ${category} error occurred while sending email to <strong>${d.destination}</strong>.</p>
                        <p><strong>Error Type:</strong> ${errorName}</p>
                        <p><strong>Original Error:</strong> ${JSON.stringify(error)}</p>`,
-                from: from || env.aws.ses.senderEmail,
+                from: from || env.smtp.from,
               });
             }
           }

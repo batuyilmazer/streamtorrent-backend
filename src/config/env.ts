@@ -21,17 +21,22 @@ export const env = {
     expireDays: Number(req("REFRESH_EXPIRES_DAYS")),
   },
 
-  aws: {
-    region: req("AWS_REGION"),
-    accessKeyId: req("AWS_ACCESS_KEY_ID"),
-    secretAccessKey: req("AWS_SECRET_ACCESS_KEY"),
-    ses: {
-      senderEmail: req("SES_SENDER_EMAIL"),
-    },
-    s3: {
-      bucket: req("S3_BUCKET_NAME"),
-      cdnDomain: process.env.CDN_DOMAIN, // Optional
-    },
+  spaces: {
+    key: req("DO_SPACES_KEY"),
+    secret: req("DO_SPACES_SECRET"),
+    endpoint: req("DO_SPACES_ENDPOINT"), // e.g. https://ams3.digitaloceanspaces.com
+    region: req("DO_SPACES_REGION"),     // e.g. ams3
+    bucket: req("DO_SPACES_BUCKET"),
+    cdnEndpoint: process.env.DO_SPACES_CDN_ENDPOINT, // Optional
+  },
+
+  smtp: {
+    host: req("SMTP_HOST"),
+    port: Number(req("SMTP_PORT")),
+    user: req("SMTP_USER"),
+    pass: req("SMTP_PASS"),
+    from: req("SMTP_FROM"),
+    secure: process.env.SMTP_SECURE === "true", // false for port 587 (STARTTLS)
   },
 
   redis: {

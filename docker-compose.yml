@@ -1,15 +1,15 @@
 version: "3.9"
 
 services:
-  ts-backend-template:
+  streamtorrent-backend:
     build: .
-    container_name: ts-backend-template-api
+    container_name: streamtorrent-backend
     mem_limit: 512m
     mem_reservation: 128m
     restart: unless-stopped
     env_file: .env
     ports:
-      - "127.0.0.1:4009:3000"
+      - "127.0.0.1:4009:8080"
     logging:
       driver: "json-file"
       options:

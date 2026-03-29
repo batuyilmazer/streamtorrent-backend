@@ -1,12 +1,12 @@
 import { PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { s3Client } from "../aws/aws.config.js";
+import { spacesClient } from "../do/spaces.config.js";
 import { env } from "../../config/env.js";
 import type { IStorageService } from "./storage.interface.js";
 
 export class S3Service implements IStorageService {
-  private bucket = env.aws.s3.bucket;
-  private cdnDomain = env.aws.s3.cdnDomain;
+  private bucket = env.spaces.bucket;
+  private cdnEndpoint = env.spaces.cdnEndpoint;
 
   async getPresignedUploadUrl(
     prefix: string,
@@ -21,19 +21,18 @@ export class S3Service implements IStorageService {
       Bucket: this.bucket,
       Key: fullKey,
       ContentType: contentType,
-      // ChecksumAlgorithm: "SHA256",
     });
 
-    const url = await getSignedUrl(s3Client, command, { expiresIn: 900 }); // 15 minutes
+    const url = await getSignedUrl(spacesClient, command, { expiresIn: 900 }); // 15 minutes
 
     return { url, key: fullKey };
   }
 
   getPublicUrl(key: string): string {
-    if (this.cdnDomain) {
-      return `https://${this.cdnDomain}/${key}`;
+    if (this.cdnEndpoint) {
+      return `${this.cdnEndpoint}/${key}`;
     }
-    return `https://${this.bucket}.s3.${env.aws.region}.amazonaws.com/${key}`;
+    return `https://${this.bucket}.${env.spaces.region}.digitaloceanspaces.com/${key}`;
   }
 
   async delete(key: string): Promise<void> {
@@ -42,7 +41,7 @@ export class S3Service implements IStorageService {
       Key: key,
     });
 
-    await s3Client.send(command);
+    await spacesClient.send(command);
   }
 
   async checkExists(
@@ -53,12 +52,12 @@ export class S3Service implements IStorageService {
       Bucket: this.bucket,
       Key: key,
     });
-    const response = await s3Client.send(command);
+    const response = await spacesClient.send(command);
 
     return {
       size: response.ContentLength || 0,
       mimeType: response.ContentType || "application/octet-stream",
-      etag: response.ETag?.replace(/"/g, "") || "", // Remove quotes from ETag
+      etag: response.ETag?.replace(/"/g, "") || "",
     };
   }
 
@@ -72,14 +71,14 @@ export class S3Service implements IStorageService {
       CopySource: `${this.bucket}/${sourceKey}`,
       Key: destinationKey,
     });
-    await s3Client.send(copyCommand);
+    await spacesClient.send(copyCommand);
 
     // 2. Delete Source
     const deleteCommand = new DeleteObjectCommand({
       Bucket: this.bucket,
       Key: sourceKey,
     });
-    await s3Client.send(deleteCommand);
+    await spacesClient.send(deleteCommand);
   }
 
   async getPresignedDownloadUrl(key: string): Promise<string> {
@@ -90,7 +89,7 @@ export class S3Service implements IStorageService {
       Key: key,
     });
 
-    return getSignedUrl(s3Client, command, { expiresIn: 3600 }); // 1 hour
+    return getSignedUrl(spacesClient, command, { expiresIn: 3600 }); // 1 hour
   }
 }
 

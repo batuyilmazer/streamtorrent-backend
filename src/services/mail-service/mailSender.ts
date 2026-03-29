@@ -1,4 +1,4 @@
-import { sendEmail } from "./aws.ses.js";
+import { sendEmail } from "./smtp.js";
 import { env } from "../../config/env.js";
 import { renderTemplate } from "./templates/template.loader.js";
 
@@ -7,8 +7,8 @@ export class MailSender {
 
   constructor(prefix?: string) {
     this.from = prefix
-      ? `${prefix}@${env.aws.ses.senderEmail}`
-      : env.aws.ses.senderEmail;
+      ? `${prefix} <${env.smtp.from}>`
+      : env.smtp.from;
   }
 
   async send(options: {

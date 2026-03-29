@@ -71,7 +71,7 @@ export async function confirmUpload(req: Request, res: Response) {
   const file = await prisma.file.create({
     data: {
       key: finalKey,
-      bucket: env.aws.s3.bucket,
+      bucket: env.spaces.bucket,
       name: finalKey.split("-").slice(1).join("-"),
       mimeType: metadata.mimeType,
       size: metadata.size,
