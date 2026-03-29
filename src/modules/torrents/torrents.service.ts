@@ -77,7 +77,7 @@ export async function upsertTorrent(
       infoHash: data.infoHash,
       name: data.name,
       magnetUri: "magnetUri" in data ? (data.magnetUri ?? null) : null,
-      torrentFile: "torrentFile" in data ? (data.torrentFile ?? null) : null,
+      torrentFile: "torrentFile" in data ? ((data.torrentFile ?? null) as Buffer as Uint8Array<ArrayBuffer> | null) : null,
       size: data.size,
       fileList: data.fileList as any,
     },
