@@ -70,7 +70,7 @@ class TorrentEngine {
           {
             infoHash,
             numPeers: torrent.numPeers,
-            numTrackers: (torrent as any).announce?.length ?? 0,
+            numTrackers: torrent.announce?.length ?? 0,
             downloaded: torrent.downloaded,
             ready: torrent.ready,
           },

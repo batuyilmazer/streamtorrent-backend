@@ -19,10 +19,16 @@ declare module "webtorrent" {
     files: TorrentFile[];
     magnetURI: string;
     torrentFile: Uint8Array;
+    announce: string[];
     done: boolean;
+    ready: boolean;
     progress: number;
+    downloaded: number;
+    numPeers: number;
     on(event: "ready", listener: () => void): this;
     on(event: "error", listener: (err: Error) => void): this;
+    on(event: "warning", listener: (warn: Error | string) => void): this;
+    on(event: "noPeers", listener: (announceType: string) => void): this;
     once(event: "ready", listener: () => void): this;
     once(event: "error", listener: (err: Error) => void): this;
   }
