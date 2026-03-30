@@ -20,7 +20,7 @@ import { env } from "./config/env.js";
 const server = express();
 server.set('trust proxy', 1);
 
-server.use(helmet());
+server.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
 
 server.use(
   cors({
