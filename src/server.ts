@@ -18,6 +18,7 @@ import {
 import { env } from "./config/env.js";
 
 const server = express();
+server.set('trust proxy', 1);
 
 server.use(helmet());
 
