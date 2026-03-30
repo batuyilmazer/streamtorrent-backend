@@ -4,6 +4,7 @@ import { asyncHandler } from "../common/asyncHandler.js";
 import { HttpError } from "../common/errors.js";
 import { getTorrentById } from "../torrents/torrents.service.js";
 import { torrentEngine } from "../../services/torrent/torrentEngine.js";
+import { prisma } from "../../config/db.js";
 import {
   mintStreamToken,
   verifyStreamToken,
@@ -21,13 +22,34 @@ interface FileEntry {
 
 // GET /api/torrents/:id/stream
 // Returns a short-lived stream token + file list for the torrent.
+// For magnet-only torrents with unresolved metadata, activates the engine
+// and waits for peer metadata before returning.
 export const getStreamSession = asyncHandler(async (req: Request, res: Response) => {
   const torrent = await getTorrentById((req as any).params.id);
 
-  const streamToken = mintStreamToken(torrent.id, torrent.infoHash);
-  const rawFiles = Array.isArray(torrent.fileList)
+  let rawFiles = Array.isArray(torrent.fileList)
     ? (torrent.fileList as unknown as FileEntry[])
     : [];
+
+  if (rawFiles.length === 0 && torrent.magnetUri) {
+    const handle = await torrentEngine.getOrAdd(torrent.infoHash, torrent.magnetUri);
+    rawFiles = handle.torrent.files.map((f, i) => ({
+      path: f.path,
+      size: Number(f.length),
+      index: i,
+    }));
+    await prisma.torrent.update({
+      where: { id: torrent.id },
+      data: {
+        name: handle.torrent.name,
+        size: BigInt(handle.torrent.length),
+        fileList: rawFiles as any,
+        lastSeenAt: new Date(),
+      },
+    });
+  }
+
+  const streamToken = mintStreamToken(torrent.id, torrent.infoHash);
   const files = rawFiles.map((f) => ({
     index: f.index,
     name: f.path.split("/").pop() ?? f.path,
