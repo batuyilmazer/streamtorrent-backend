@@ -28,7 +28,7 @@ const corsOptions = {
 };
 server.use(cors(corsOptions));
 // CORS preflight: make sure OPTIONS requests don't fall through to 404.
-server.options("*", cors(corsOptions));
+server.options(/.*/, cors(corsOptions));
 server.use(express.json({ limit: "5mb" }));
 server.use(cookieParser());
 // Healthcheck
