@@ -11,6 +11,7 @@ import {
   needsRemux,
   getContentType,
 } from "./stream.service.js";
+import { logger } from "../../config/logger.js";
 
 interface FileEntry {
   path: string;
@@ -61,6 +62,18 @@ export const streamFile = asyncHandler(async (req: Request, res: Response) => {
   } else if (dbTorrent.magnetUri) {
     source = dbTorrent.magnetUri;
   }
+
+  logger.info(
+    {
+      torrentId: payload.torrentId,
+      infoHash: payload.infoHash,
+      fileIndex,
+      range: req.headers.range,
+      hasFile: !!dbTorrent.torrentFile,
+      hasMagnet: !!dbTorrent.magnetUri,
+    },
+    "[Stream] request received"
+  );
 
   // Activate (or retrieve cached) torrent in the engine.
   await torrentEngine.getOrAdd(payload.infoHash, source);

@@ -2,6 +2,7 @@ import WebTorrent from "webtorrent";
 import type { Torrent as WTTorrent, TorrentFile as WTTorrentFile } from "webtorrent";
 import { env } from "../../config/env.js";
 import { HttpError } from "../../modules/common/errors.js";
+import { logger } from "../../config/logger.js";
 
 export interface TorrentHandle {
   infoHash: string;
@@ -23,7 +24,7 @@ class TorrentEngine {
     });
 
     this.client.on("error", (err: Error) => {
-      console.error("[TorrentEngine] client error:", err);
+      logger.error({ err }, "[TorrentEngine] client error");
     });
 
     const cleanupInterval = setInterval(() => {
@@ -31,7 +32,7 @@ class TorrentEngine {
       for (const [hash, handle] of this.torrents) {
         if (handle.lastAccessedAt < threshold) {
           this.remove(hash).catch((err) =>
-            console.error(`[TorrentEngine] cleanup error for ${hash}:`, err)
+            logger.error({ err, infoHash: hash }, "[TorrentEngine] cleanup error")
           );
         }
       }
@@ -57,19 +58,53 @@ class TorrentEngine {
     if (inProgress) return inProgress;
 
     const promise = new Promise<TorrentHandle>((resolve, reject) => {
-      const input: string | Buffer = source ?? `magnet:?xt=urn:btih:${infoHash}`;
+      const sourceType = !source ? "infoHash-magnet" : Buffer.isBuffer(source) ? "torrent-file" : "magnet";
+      logger.info({ infoHash, sourceType }, "[TorrentEngine] adding torrent");
 
+      const input: string | Buffer = source ?? `magnet:?xt=urn:btih:${infoHash}`;
       const torrent = this.client.add(input, { private: false });
 
+      // Log peer discovery progress every 10 seconds
+      const progressInterval = setInterval(() => {
+        logger.debug(
+          {
+            infoHash,
+            numPeers: torrent.numPeers,
+            numTrackers: (torrent as any).announce?.length ?? 0,
+            downloaded: torrent.downloaded,
+            ready: torrent.ready,
+          },
+          "[TorrentEngine] waiting for peers"
+        );
+      }, 10_000);
+
+      torrent.on("warning", (warn: Error | string) => {
+        logger.warn({ infoHash, warn: warn instanceof Error ? warn.message : warn }, "[TorrentEngine] torrent warning");
+      });
+
+      torrent.on("noPeers", (announceType: string) => {
+        logger.warn({ infoHash, announceType }, "[TorrentEngine] no peers found");
+      });
+
       const timer = setTimeout(() => {
+        clearInterval(progressInterval);
         torrent.removeAllListeners("ready");
         torrent.removeAllListeners("error");
+        logger.error(
+          { infoHash, numPeers: torrent.numPeers, sourceType },
+          "[TorrentEngine] timed out waiting for peers"
+        );
         this.pending.delete(infoHash);
         reject(HttpError.internal("Torrent not ready: timed out waiting for peers."));
       }, 45_000);
 
       torrent.once("ready", () => {
         clearTimeout(timer);
+        clearInterval(progressInterval);
+        logger.info(
+          { infoHash, name: torrent.name, numFiles: torrent.files.length, numPeers: torrent.numPeers },
+          "[TorrentEngine] torrent ready"
+        );
         const handle: TorrentHandle = {
           infoHash: torrent.infoHash,
           torrent,
@@ -82,6 +117,8 @@ class TorrentEngine {
 
       torrent.once("error", (err: Error) => {
         clearTimeout(timer);
+        clearInterval(progressInterval);
+        logger.error({ err, infoHash }, "[TorrentEngine] torrent error");
         this.pending.delete(infoHash);
         reject(err);
       });
@@ -117,6 +154,7 @@ class TorrentEngine {
         (err: Error | null) => {
           if (err) return reject(err);
           this.torrents.delete(infoHash);
+          logger.info({ infoHash }, "[TorrentEngine] torrent removed");
           resolve();
         }
       );
