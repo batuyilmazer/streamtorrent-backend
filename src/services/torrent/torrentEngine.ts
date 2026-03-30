@@ -12,6 +12,7 @@ export interface TorrentHandle {
 class TorrentEngine {
   private client: WebTorrent;
   private torrents: Map<string, TorrentHandle> = new Map();
+  private pending: Map<string, Promise<TorrentHandle>> = new Map();
 
   constructor() {
     this.client = new WebTorrent({
@@ -52,7 +53,10 @@ class TorrentEngine {
       );
     }
 
-    return new Promise((resolve, reject) => {
+    const inProgress = this.pending.get(infoHash);
+    if (inProgress) return inProgress;
+
+    const promise = new Promise<TorrentHandle>((resolve, reject) => {
       const input: string | Buffer = source ?? `magnet:?xt=urn:btih:${infoHash}`;
 
       const torrent = this.client.add(input, { private: false });
@@ -60,6 +64,7 @@ class TorrentEngine {
       const timer = setTimeout(() => {
         torrent.removeAllListeners("ready");
         torrent.removeAllListeners("error");
+        this.pending.delete(infoHash);
         reject(HttpError.internal("Torrent not ready: timed out waiting for peers."));
       }, 45_000);
 
@@ -71,14 +76,19 @@ class TorrentEngine {
           lastAccessedAt: Date.now(),
         };
         this.torrents.set(torrent.infoHash, handle);
+        this.pending.delete(infoHash);
         resolve(handle);
       });
 
       torrent.once("error", (err: Error) => {
         clearTimeout(timer);
+        this.pending.delete(infoHash);
         reject(err);
       });
     });
+
+    this.pending.set(infoHash, promise);
+    return promise;
   }
 
   getFile(infoHash: string, fileIndex: number): WTTorrentFile {
