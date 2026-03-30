@@ -72,7 +72,17 @@ export async function upsertTorrent(
 ) {
   return prisma.torrent.upsert({
     where: { infoHash: data.infoHash },
-    update: { lastSeenAt: new Date() },
+    update: {
+      lastSeenAt: new Date(),
+      // Overwrite with richer data when re-uploading a .torrent file over a
+      // previously magnet-only record (which has an empty fileList).
+      ...("fileList" in data && (data.fileList as FileEntry[]).length > 0
+        ? { name: data.name, fileList: data.fileList as any }
+        : {}),
+      ...("torrentFile" in data && data.torrentFile
+        ? { torrentFile: data.torrentFile as any }
+        : {}),
+    },
     create: {
       infoHash: data.infoHash,
       name: data.name,

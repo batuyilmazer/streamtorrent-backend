@@ -57,7 +57,14 @@ class TorrentEngine {
 
       const torrent = this.client.add(input, { private: false });
 
+      const timer = setTimeout(() => {
+        torrent.removeAllListeners("ready");
+        torrent.removeAllListeners("error");
+        reject(HttpError.internal("Torrent not ready: timed out waiting for peers."));
+      }, 45_000);
+
       torrent.once("ready", () => {
+        clearTimeout(timer);
         const handle: TorrentHandle = {
           infoHash: torrent.infoHash,
           torrent,
@@ -68,6 +75,7 @@ class TorrentEngine {
       });
 
       torrent.once("error", (err: Error) => {
+        clearTimeout(timer);
         reject(err);
       });
     });

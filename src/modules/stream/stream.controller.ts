@@ -24,7 +24,10 @@ export const getStreamSession = asyncHandler(async (req: Request, res: Response)
   const torrent = await getTorrentById((req as any).params.id);
 
   const streamToken = mintStreamToken(torrent.id, torrent.infoHash);
-  const files = (torrent.fileList as unknown as FileEntry[]).map((f) => ({
+  const rawFiles = Array.isArray(torrent.fileList)
+    ? (torrent.fileList as unknown as FileEntry[])
+    : [];
+  const files = rawFiles.map((f) => ({
     index: f.index,
     name: f.path.split("/").pop() ?? f.path,
     path: f.path,
