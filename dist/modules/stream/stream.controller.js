@@ -70,6 +70,7 @@ export const streamFile = asyncHandler(async (req, res) => {
     }, "[Stream] request received");
     // Activate (or retrieve cached) torrent in the engine.
     await torrentEngine.getOrAdd(payload.infoHash, source);
+    await torrentEngine.waitForPeers(payload.infoHash);
     // Resolve the specific file and prioritise its download.
     const wtFile = torrentEngine.getFile(payload.infoHash, fileIndex);
     wtFile.select();

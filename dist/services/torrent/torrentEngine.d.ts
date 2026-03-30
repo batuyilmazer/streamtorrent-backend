@@ -10,6 +10,7 @@ declare class TorrentEngine {
     private pending;
     constructor();
     getOrAdd(infoHash: string, source?: string | Buffer): Promise<TorrentHandle>;
+    waitForPeers(infoHash: string, timeoutMs?: number): Promise<void>;
     getFile(infoHash: string, fileIndex: number): WTTorrentFile;
     remove(infoHash: string): Promise<void>;
     activeCount(): number;

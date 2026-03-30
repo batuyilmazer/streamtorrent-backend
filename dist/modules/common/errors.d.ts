@@ -8,6 +8,7 @@ export declare class HttpError extends Error {
     static unauthorized(message?: string, code?: string): HttpError;
     static forbidden(message?: string, code?: string): HttpError;
     static notFound(message?: string, code?: string): HttpError;
+    static serviceUnavailable(message?: string, code?: string): HttpError;
     static internal(message?: string): HttpError;
 }
 //# sourceMappingURL=errors.d.ts.map

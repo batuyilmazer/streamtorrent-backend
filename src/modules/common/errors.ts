@@ -31,6 +31,13 @@ export class HttpError extends Error {
     return new HttpError(404, message, code);
   }
 
+  static serviceUnavailable(
+    message = "Service Unavailable",
+    code = "SERVICE_UNAVAILABLE"
+  ) {
+    return new HttpError(503, message, code);
+  }
+
   static internal(message = "Internal Server Error") {
     return new HttpError(500, message, "INTERNAL_ERROR");
   }
