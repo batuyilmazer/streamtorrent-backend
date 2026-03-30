@@ -1,5 +1,5 @@
 
-FROM node:20-alpine AS builder
+FROM node:20-bookworm-slim AS builder
 
 WORKDIR /app
 
@@ -9,17 +9,17 @@ RUN npm install
 
 COPY . .
 
-RUN npx prisma generate 
+RUN npx prisma generate
 
-RUN npm run build 
+RUN npm run build
 
 
 # -------------------------------------------------------------
 
 
-FROM node:20-alpine
+FROM node:20-bookworm-slim
 
-RUN apk add --no-cache ffmpeg
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
