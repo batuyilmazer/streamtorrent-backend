@@ -1,0 +1,116 @@
+import ffmpeg from "fluent-ffmpeg";
+import { asyncHandler } from "../common/asyncHandler.js";
+import { HttpError } from "../common/errors.js";
+import { getTorrentById } from "../torrents/torrents.service.js";
+import { torrentEngine } from "../../services/torrent/torrentEngine.js";
+import { prisma } from "../../config/db.js";
+import { mintStreamToken, verifyStreamToken, parseRangeHeader, needsRemux, getContentType, } from "./stream.service.js";
+import { logger } from "../../config/logger.js";
+// GET /api/torrents/:id/stream
+// Returns a short-lived stream token + file list for the torrent.
+// For magnet-only torrents with unresolved metadata, activates the engine
+// and waits for peer metadata before returning.
+export const getStreamSession = asyncHandler(async (req, res) => {
+    const torrent = await getTorrentById(req.params.id);
+    let rawFiles = Array.isArray(torrent.fileList)
+        ? torrent.fileList
+        : [];
+    if (rawFiles.length === 0 && torrent.magnetUri) {
+        const handle = await torrentEngine.getOrAdd(torrent.infoHash, torrent.magnetUri);
+        rawFiles = handle.torrent.files.map((f, i) => ({
+            path: f.path,
+            size: Number(f.length),
+            index: i,
+        }));
+        await prisma.torrent.update({
+            where: { id: torrent.id },
+            data: {
+                name: handle.torrent.name,
+                size: BigInt(handle.torrent.length),
+                fileList: rawFiles,
+                lastSeenAt: new Date(),
+            },
+        });
+    }
+    const streamToken = mintStreamToken(torrent.id, torrent.infoHash);
+    const files = rawFiles.map((f) => ({
+        index: f.index,
+        name: f.path.split("/").pop() ?? f.path,
+        path: f.path,
+        size: f.size,
+    }));
+    res.json({ streamToken, files });
+});
+// GET /api/stream/:streamToken/:fileIndex
+// Streams the requested file with Range request support.
+// Remuxes mkv/avi/mov → mp4 via FFmpeg (container swap only, no re-encode).
+export const streamFile = asyncHandler(async (req, res) => {
+    const { streamToken, fileIndex: fileIndexStr } = req.params;
+    const fileIndex = parseInt(fileIndexStr, 10);
+    if (isNaN(fileIndex) || fileIndex < 0) {
+        throw HttpError.badRequest("fileIndex must be a non-negative integer.");
+    }
+    const payload = verifyStreamToken(streamToken);
+    const dbTorrent = await getTorrentById(payload.torrentId);
+    // Determine the source WebTorrent can use to activate the torrent.
+    let source;
+    if (dbTorrent.torrentFile) {
+        source = Buffer.from(dbTorrent.torrentFile);
+    }
+    else if (dbTorrent.magnetUri) {
+        source = dbTorrent.magnetUri;
+    }
+    logger.info({
+        torrentId: payload.torrentId,
+        infoHash: payload.infoHash,
+        fileIndex,
+        range: req.headers.range,
+        hasFile: !!dbTorrent.torrentFile,
+        hasMagnet: !!dbTorrent.magnetUri,
+    }, "[Stream] request received");
+    // Activate (or retrieve cached) torrent in the engine.
+    await torrentEngine.getOrAdd(payload.infoHash, source);
+    // Resolve the specific file and prioritise its download.
+    const wtFile = torrentEngine.getFile(payload.infoHash, fileIndex);
+    wtFile.select();
+    const filename = wtFile.name;
+    if (needsRemux(filename)) {
+        // FFmpeg remux: container-swap only (no transcoding).
+        // movflags frag_keyframe+empty_moov enables streaming without seeking.
+        res.setHeader("Content-Type", "video/mp4");
+        res.setHeader("Accept-Ranges", "none");
+        const inputStream = wtFile.createReadStream();
+        ffmpeg(inputStream)
+            .outputOptions([
+            "-c:v copy",
+            "-c:a copy",
+            "-movflags frag_keyframe+empty_moov",
+            "-f mp4",
+        ])
+            .on("error", (_err) => {
+            if (!res.headersSent)
+                res.status(500).end();
+            else
+                res.end();
+        })
+            .pipe(res, { end: true });
+    }
+    else {
+        // Direct streaming with HTTP Range support.
+        const totalSize = wtFile.length;
+        const { start, end, chunkSize, partial } = parseRangeHeader(req.headers.range, totalSize);
+        const headers = {
+            "Content-Type": getContentType(filename),
+            "Accept-Ranges": "bytes",
+            "Content-Length": chunkSize,
+        };
+        if (partial) {
+            headers["Content-Range"] = `bytes ${start}-${end}/${totalSize}`;
+        }
+        res.writeHead(partial ? 206 : 200, headers);
+        const readStream = wtFile.createReadStream({ start, end });
+        readStream.on("error", () => res.end());
+        readStream.pipe(res);
+    }
+});
+//# sourceMappingURL=stream.controller.js.map

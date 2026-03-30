@@ -15,17 +15,24 @@ export async function verifyUser(emailRaw, password) {
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user)
         throw HttpError.unauthorized("Email or password is incorrect.", "INVALID_CREDENTIALS");
+    if (user.lockUntil && user.lockUntil > new Date()) {
+        throw HttpError.forbidden("Account temporarily locked. Please try again later.", "ACCOUNT_LOCKED");
+    }
     const ok = await argon2.verify(user.passwordHash, password);
     if (!ok) {
+        const newCount = user.failedLoginCount + 1;
+        const lockUntil = newCount >= 10
+            ? new Date(Date.now() + 15 * 60 * 1000) // lock for 15 min after 10 failures
+            : null;
         await prisma.user.update({
             where: { id: user.id },
-            data: { failedLoginCount: { increment: 1 } },
+            data: { failedLoginCount: newCount, ...(lockUntil ? { lockUntil } : {}) },
         });
         throw HttpError.unauthorized("Email or password is incorrect.", "INVALID_CREDENTIALS");
     }
     await prisma.user.update({
         where: { id: user.id },
-        data: { failedLoginCount: 0, lastLoginAt: new Date() },
+        data: { failedLoginCount: 0, lockUntil: null, lastLoginAt: new Date() },
     });
     return { id: user.id, email: user.email };
 }

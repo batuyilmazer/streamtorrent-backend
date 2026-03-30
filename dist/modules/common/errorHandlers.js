@@ -1,10 +1,16 @@
 import { ZodError } from "zod";
 import { HttpError } from "./errors.js";
+import { logger } from "../../config/logger.js";
 export function notFoundHandler(_req, res) {
     res.status(404).json({ error: "NOT_FOUND" });
 }
 export function globalErrorHandler(err, req, res, next) {
-    console.log(err);
+    if (err instanceof HttpError && err.statusCode < 500) {
+        logger.warn({ statusCode: err.statusCode, code: err.code, path: req.path }, err.message);
+    }
+    else {
+        logger.error({ err, path: req.path, method: req.method }, "Unhandled error");
+    }
     if (err instanceof ZodError) {
         return res.status(400).json({
             error: "VALIDATION_ERROR",
@@ -14,7 +20,7 @@ export function globalErrorHandler(err, req, res, next) {
     if (err instanceof HttpError) {
         return res
             .status(err.statusCode)
-            .json({ Error: err.code, message: err.message });
+            .json({ error: err.code, message: err.message });
     }
     return res.status(500).json({ error: "INTERNAL_SERVER_ERROR" });
 }

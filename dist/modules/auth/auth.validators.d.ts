@@ -17,8 +17,8 @@ export declare const logoutSchema: z.ZodObject<{
 }, z.core.$strip>;
 export declare const twofaSchema: z.ZodObject<{
     scope: z.ZodEnum<{
-        "reset-password": "reset-password";
         "verify-email": "verify-email";
+        "reset-password": "reset-password";
     }>;
 }, z.core.$strip>;
 export declare const passwordResetSchema: z.ZodObject<{

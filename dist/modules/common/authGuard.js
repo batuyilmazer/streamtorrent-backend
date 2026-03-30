@@ -21,7 +21,7 @@ export function authGuard(req, res, next) {
 }
 export function twoFactorAuthGuard(scope) {
     return async (req, res, next) => {
-        const token = req.query.token;
+        const token = req.body?.token;
         try {
             if (!token)
                 throw HttpError.unauthorized("No 2FA token provided.");

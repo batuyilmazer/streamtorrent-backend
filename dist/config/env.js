@@ -39,5 +39,15 @@ export const env = {
         email: req("ADMIN_EMAIL"),
         password: req("ADMIN_PASSWORD"),
     },
+    allowedOrigins: (process.env.ALLOWED_ORIGINS ?? "")
+        .split(",")
+        .map((o) => o.trim())
+        .filter(Boolean),
+    torrent: {
+        maxConcurrent: Number(process.env.MAX_CONCURRENT_TORRENTS ?? "20"),
+        maxSizeGb: Number(process.env.MAX_TORRENT_SIZE_GB ?? "10"),
+        streamTokenSecret: req("STREAM_TOKEN_SECRET"),
+        streamTokenExpiry: process.env.STREAM_TOKEN_EXPIRY ?? "1h",
+    },
 };
 //# sourceMappingURL=env.js.map

@@ -31,5 +31,12 @@ export declare const env: {
         email: string;
         password: string;
     };
+    allowedOrigins: string[];
+    torrent: {
+        maxConcurrent: number;
+        maxSizeGb: number;
+        streamTokenSecret: string;
+        streamTokenExpiry: string;
+    };
 };
 //# sourceMappingURL=env.d.ts.map

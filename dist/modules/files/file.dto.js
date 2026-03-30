@@ -1,8 +1,22 @@
 import { z } from "zod";
 import { FilePurpose } from "@prisma/client";
+const ALLOWED_MIME_TYPES = [
+    "image/jpeg",
+    "image/png",
+    "image/gif",
+    "image/webp",
+    "image/svg+xml",
+    "video/mp4",
+    "video/webm",
+    "video/x-matroska",
+    "video/x-msvideo",
+    "video/quicktime",
+    "application/pdf",
+    "application/octet-stream",
+];
 export const initUploadSchema = z.object({
     fileName: z.string().min(1),
-    mimeType: z.string().includes("/"), // Basic mime check
+    mimeType: z.enum(ALLOWED_MIME_TYPES),
     size: z.number().positive(),
     purpose: z.enum(FilePurpose),
     checksum: z.string().min(10, "Invalid checksum"), // Basic length check for SHA256 base64

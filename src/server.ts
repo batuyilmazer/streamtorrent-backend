@@ -22,18 +22,26 @@ server.set('trust proxy', 1);
 
 server.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
 
+const corsOptions = {
+  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    if (!origin || env.allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  optionsSuccessStatus: 204,
+};
+
 server.use(
-  cors({
-    origin: (origin, callback) => {
-      if (!origin || env.allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error("Not allowed by CORS"));
-      }
-    },
-    credentials: true,
-  }),
+  cors(corsOptions),
 );
+
+// CORS preflight: make sure OPTIONS requests don't fall through to 404.
+server.options("*", cors(corsOptions));
 
 server.use(express.json({ limit: "5mb" }));
 server.use(cookieParser());
