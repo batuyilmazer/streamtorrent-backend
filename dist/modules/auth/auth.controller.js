@@ -6,23 +6,33 @@ import { MailSender } from "../../services/mail-service/mailSender.js";
 import { env } from "../../config/env.js";
 const REFRESH_COOKIE = "refreshToken";
 const DEVICE_COOKIE = "deviceId";
-function cookieOptions() {
+function isSecureRequest(req) {
+    if (req.secure)
+        return true;
+    const forwardedProto = req.headers["x-forwarded-proto"];
+    if (typeof forwardedProto === "string") {
+        return forwardedProto.split(",")[0]?.trim() === "https";
+    }
+    return false;
+}
+function cookieOptions(req) {
     return {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
+        secure: isSecureRequest(req),
         sameSite: "lax",
         path: "/",
         maxAge: env.refresh.expireDays * 24 * 60 * 60 * 1000,
     };
 }
-function setSessionCookies(res, refreshToken, deviceId) {
-    res.cookie(REFRESH_COOKIE, refreshToken, cookieOptions());
-    res.cookie(DEVICE_COOKIE, deviceId, cookieOptions());
+function setSessionCookiesWithReq(req, res, refreshToken, deviceId) {
+    const opts = cookieOptions(req);
+    res.cookie(REFRESH_COOKIE, refreshToken, opts);
+    res.cookie(DEVICE_COOKIE, deviceId, opts);
 }
-function clearSessionCookies(res) {
+function clearSessionCookies(req, res) {
     const opts = {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
+        secure: isSecureRequest(req),
         sameSite: "lax",
         path: "/",
     };
@@ -35,16 +45,10 @@ export const register = async (req, res) => {
     const { id, email } = await createUser(emailRaw, passwordRaw);
     const accessToken = signAccessToken(id);
     const { raw, deviceId } = await issueRefreshToken(id, req.headers["user-agent"], req.ip);
-    setSessionCookies(res, raw, deviceId);
+    setSessionCookiesWithReq(req, res, raw, deviceId);
     res.status(201).json({
         user: { id, email },
         access: accessToken,
-        session: {
-            refreshToken: raw,
-            deviceId,
-            userAgent: req.headers["user-agent"],
-            ip: req.ip,
-        },
     });
 };
 export const login = async (req, res) => {
@@ -52,17 +56,12 @@ export const login = async (req, res) => {
     const user = await verifyUser(email, password);
     const accessToken = signAccessToken(user.id);
     if (deviceId)
-        revokeActiveTokensForDevice(user.id, deviceId);
+        await revokeActiveTokensForDevice(user.id, deviceId);
     const session = await issueRefreshToken(user.id, req.headers["user-agent"], req.ip, deviceId);
-    setSessionCookies(res, session.raw, session.deviceId);
+    setSessionCookiesWithReq(req, res, session.raw, session.deviceId);
     res.status(200).json({
         user: { userId: user.id, email: user.email },
         access: accessToken,
-        session: {
-            refreshToken: session.raw,
-            expiresAt: session.expiresAt,
-            deviceId: session.deviceId,
-        },
     });
 };
 export const refresh = async (req, res) => {
@@ -77,21 +76,21 @@ export const refresh = async (req, res) => {
         throw HttpError.badRequest("No deviceId provided.");
     const { userId, newRaw } = await verifyAndRotate(rawToken, resolvedDeviceId, req.headers["user-agent"], req.ip);
     const access = signAccessToken(userId);
-    setSessionCookies(res, newRaw, resolvedDeviceId);
-    res.json({ newRaw, access });
+    setSessionCookiesWithReq(req, res, newRaw, resolvedDeviceId);
+    res.json({ access });
 };
 export const logout = async (req, res) => {
     const refreshToken = req.body?.refreshToken ?? req.cookies?.[REFRESH_COOKIE];
     if (refreshToken) {
         await revokeByRaw(refreshToken);
     }
-    clearSessionCookies(res);
+    clearSessionCookies(req, res);
     res.status(200).json({ msg: "Logged out." });
 };
 export const logoutAll = async (req, res) => {
     const userId = req.user.id;
     await revokeAll(userId);
-    clearSessionCookies(res);
+    clearSessionCookies(req, res);
     res.status(200).json({ msg: "Logged out from all devices." });
 };
 export const twofa = async (req, res) => {

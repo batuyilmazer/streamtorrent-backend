@@ -2,6 +2,8 @@ import jwt from "jsonwebtoken";
 import path from "path";
 import { env } from "../../config/env.js";
 import { HttpError } from "../common/errors.js";
+/** Max bytes per stream response slice (Range / first read) — limits memory per request. */
+const MAX_STREAM_CHUNK_BYTES = 10 * 1024 * 1024;
 export function mintStreamToken(torrentId, infoHash) {
     // Cast required: exactOptionalPropertyTypes conflicts with jwt's expiresIn type
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -19,15 +21,32 @@ export function verifyStreamToken(token) {
 }
 export function parseRangeHeader(rangeHeader, totalSize) {
     if (!rangeHeader) {
-        return { start: 0, end: totalSize - 1, chunkSize: totalSize, partial: false };
+        if (totalSize <= MAX_STREAM_CHUNK_BYTES) {
+            return {
+                start: 0,
+                end: totalSize - 1,
+                chunkSize: totalSize,
+                partial: false,
+            };
+        }
+        return {
+            start: 0,
+            end: MAX_STREAM_CHUNK_BYTES - 1,
+            chunkSize: MAX_STREAM_CHUNK_BYTES,
+            partial: true,
+        };
     }
     const match = rangeHeader.match(/^bytes=(\d*)-(\d*)$/);
     if (!match) {
         throw HttpError.badRequest("Invalid Range header.");
     }
     const start = match[1] ? parseInt(match[1], 10) : 0;
-    const end = match[2] ? parseInt(match[2], 10) : totalSize - 1;
-    if (start > end || end >= totalSize) {
+    let end = match[2] ? parseInt(match[2], 10) : totalSize - 1;
+    if (!Number.isFinite(start) || !Number.isFinite(end)) {
+        throw HttpError.badRequest("Invalid Range header.");
+    }
+    end = Math.min(end, start + MAX_STREAM_CHUNK_BYTES - 1, totalSize - 1);
+    if (start >= totalSize || start > end || end >= totalSize) {
         throw HttpError.badRequest("Range not satisfiable.");
     }
     return { start, end, chunkSize: end - start + 1, partial: true };

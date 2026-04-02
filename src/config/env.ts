@@ -21,6 +21,17 @@ export const env = {
     expireDays: Number(req("REFRESH_EXPIRES_DAYS")),
   },
 
+  /** Session cookies: cross-origin SPA→API fetches need SameSite=None on HTTPS. Override via AUTH_COOKIE_SAMESITE=lax if needed. */
+  authCookie: {
+    domain: process.env.AUTH_COOKIE_DOMAIN?.trim() || undefined,
+    sameSite:
+      process.env.AUTH_COOKIE_SAMESITE === "lax"
+        ? ("lax" as const)
+        : process.env.AUTH_COOKIE_SAMESITE === "none"
+          ? ("none" as const)
+          : undefined,
+  },
+
   spaces: {
     key: req("DO_SPACES_KEY"),
     secret: req("DO_SPACES_SECRET"),

@@ -13,6 +13,8 @@ import {
   getContentType,
 } from "./stream.service.js";
 import { logger } from "../../config/logger.js";
+import { env } from "../../config/env.js";
+import { maxTorrentBytes } from "../common/torrentLimits.js";
 
 interface FileEntry {
   path: string;
@@ -33,6 +35,13 @@ export const getStreamSession = asyncHandler(async (req: Request, res: Response)
 
   if (rawFiles.length === 0 && torrent.magnetUri) {
     const handle = await torrentEngine.getOrAdd(torrent.infoHash, torrent.magnetUri);
+    const resolvedLen = BigInt(handle.torrent.length);
+    const maxBytes = maxTorrentBytes();
+    if (resolvedLen > maxBytes) {
+      throw HttpError.badRequest(
+        `Torrent exceeds the ${env.torrent.maxSizeGb} GB size limit.`,
+      );
+    }
     rawFiles = handle.torrent.files.map((f, i) => ({
       path: f.path,
       size: Number(f.length),
@@ -76,6 +85,20 @@ export const streamFile = asyncHandler(async (req: Request, res: Response) => {
 
   const payload = verifyStreamToken(streamToken);
   const dbTorrent = await getTorrentById(payload.torrentId);
+
+  const streamFiles = Array.isArray(dbTorrent.fileList)
+    ? (dbTorrent.fileList as unknown as FileEntry[])
+    : [];
+  if (streamFiles.length === 0) {
+    throw HttpError.badRequest(
+      "Torrent metadata is not ready yet. Request a stream session first to resolve the file list.",
+    );
+  }
+  if (fileIndex >= streamFiles.length) {
+    throw HttpError.badRequest(
+      `Invalid fileIndex. Torrent has ${streamFiles.length} file(s).`,
+    );
+  }
 
   // Determine the source WebTorrent can use to activate the torrent.
   let source: string | Buffer | undefined;
@@ -122,7 +145,16 @@ export const streamFile = asyncHandler(async (req: Request, res: Response) => {
         "-movflags frag_keyframe+empty_moov",
         "-f mp4",
       ])
-      .on("error", (_err: Error) => {
+      .on("error", (err: Error) => {
+        logger.error(
+          {
+            err,
+            torrentId: payload.torrentId,
+            infoHash: payload.infoHash,
+            fileIndex,
+          },
+          "[Stream] FFmpeg remux error",
+        );
         if (!res.headersSent) res.status(500).end();
         else res.end();
       })

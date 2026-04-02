@@ -8,6 +8,7 @@ export declare const createUser: (emailRaw: string, passwordRaw: string) => Prom
     lockUntil: Date | null;
     lastLoginAt: Date | null;
     passwordChangedAt: Date | null;
+    role: import("@prisma/client").$Enums.Role;
     createdAt: Date;
     updatedAt: Date;
 }>;
@@ -38,6 +39,7 @@ export declare const verifyUserEmail: (userId: string) => Promise<{
     lockUntil: Date | null;
     lastLoginAt: Date | null;
     passwordChangedAt: Date | null;
+    role: import("@prisma/client").$Enums.Role;
     createdAt: Date;
     updatedAt: Date;
 }>;
@@ -51,6 +53,7 @@ export declare const resetUserPassword: (userId: string, newPassword: string) =>
     lockUntil: Date | null;
     lastLoginAt: Date | null;
     passwordChangedAt: Date | null;
+    role: import("@prisma/client").$Enums.Role;
     createdAt: Date;
     updatedAt: Date;
 }>;

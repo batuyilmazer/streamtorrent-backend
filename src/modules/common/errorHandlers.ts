@@ -19,9 +19,10 @@ export function globalErrorHandler(
     logger.error({ err, path: req.path, method: req.method }, "Unhandled error");
   }
   if (err instanceof ZodError) {
+    const zodErr = err as ZodError;
     return res.status(400).json({
       error: "VALIDATION_ERROR",
-      details: (err as ZodError).issues,
+      details: zodErr.issues.map((i) => ({ path: i.path, message: i.message })),
     });
   }
   if (err instanceof HttpError) {

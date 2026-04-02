@@ -2,6 +2,17 @@ import parseTorrent from "parse-torrent";
 import path from "path";
 import { prisma } from "../../config/db.js";
 import { HttpError } from "../common/errors.js";
+function torrentTotalLengthToBigInt(value) {
+    if (typeof value === "bigint")
+        return value;
+    if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
+        return BigInt(Math.trunc(value));
+    }
+    if (typeof value === "string" && /^[0-9]+$/.test(value)) {
+        return BigInt(value);
+    }
+    return 0n;
+}
 export async function parseTorrentBuffer(buffer) {
     let parsed;
     try {
@@ -24,7 +35,7 @@ export async function parseTorrentBuffer(buffer) {
     return {
         infoHash: parsed.infoHash,
         name: parsed.name ?? "Unknown",
-        size: BigInt(Number(parsed.length ?? 0)),
+        size: torrentTotalLengthToBigInt(parsed.length),
         fileList,
         torrentFile: buffer,
     };

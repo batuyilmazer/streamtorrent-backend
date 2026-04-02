@@ -30,12 +30,33 @@ function isSecureRequest(req: Request): boolean {
   return false;
 }
 
+function resolveCookieSameSite(req: Request): "lax" | "none" {
+  if (env.authCookie.sameSite) return env.authCookie.sameSite;
+  return isSecureRequest(req) ? "none" : "lax";
+}
+
+function sessionCookieShape(req: Request): {
+  httpOnly: true;
+  secure: boolean;
+  sameSite: "lax" | "none";
+  path: string;
+  domain?: string;
+} {
+  const sameSite = resolveCookieSameSite(req);
+  const secure = sameSite === "none" ? true : isSecureRequest(req);
+  const base = {
+    httpOnly: true as const,
+    secure,
+    sameSite,
+    path: "/",
+    ...(env.authCookie.domain ? { domain: env.authCookie.domain } : {}),
+  };
+  return base;
+}
+
 function cookieOptions(req: Request) {
   return {
-    httpOnly: true,
-    secure: isSecureRequest(req),
-    sameSite: "lax" as const,
-    path: "/",
+    ...sessionCookieShape(req),
     maxAge: env.refresh.expireDays * 24 * 60 * 60 * 1000,
   };
 }
@@ -47,12 +68,7 @@ function setSessionCookiesWithReq(req: Request, res: Response, refreshToken: str
 }
 
 function clearSessionCookies(req: Request, res: Response) {
-  const opts = {
-    httpOnly: true,
-    secure: isSecureRequest(req),
-    sameSite: "lax" as const,
-    path: "/",
-  };
+  const opts = sessionCookieShape(req);
   res.clearCookie(REFRESH_COOKIE, opts);
   res.clearCookie(DEVICE_COOKIE, opts);
 }

@@ -1,5 +1,7 @@
 import type { Request, Response } from "express";
 import { HttpError } from "../common/errors.js";
+import { env } from "../../config/env.js";
+import { maxTorrentBytes } from "../common/torrentLimits.js";
 import {
   getTorrentById,
   parseMagnetString,
@@ -21,6 +23,12 @@ export async function upload(req: Request, res: Response) {
   }
 
   const data = await parseTorrentBuffer(buffer);
+  const maxBytes = maxTorrentBytes();
+  if (data.size > maxBytes) {
+    throw HttpError.badRequest(
+      `Torrent exceeds the ${env.torrent.maxSizeGb} GB size limit.`,
+    );
+  }
   const torrent = await upsertTorrent(data);
   res.status(201).json({ torrent: serializeTorrent(torrent as Record<string, unknown>) });
 }

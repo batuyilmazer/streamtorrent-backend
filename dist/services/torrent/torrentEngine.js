@@ -44,7 +44,8 @@ class TorrentEngine {
             return Promise.resolve(existing);
         }
         if (this.activeCount() >= env.torrent.maxConcurrent) {
-            throw HttpError.internal(`Max concurrent torrents (${env.torrent.maxConcurrent}) reached.`);
+            logger.warn({ maxConcurrent: env.torrent.maxConcurrent }, "[TorrentEngine] max concurrent torrents reached");
+            throw HttpError.serviceUnavailable("Server is at capacity. Try again later.");
         }
         const inProgress = this.pending.get(infoHash);
         if (inProgress)

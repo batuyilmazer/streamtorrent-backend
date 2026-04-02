@@ -9,6 +9,17 @@ interface FileEntry {
   index: number;
 }
 
+function torrentTotalLengthToBigInt(value: unknown): bigint {
+  if (typeof value === "bigint") return value;
+  if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
+    return BigInt(Math.trunc(value));
+  }
+  if (typeof value === "string" && /^[0-9]+$/.test(value)) {
+    return BigInt(value);
+  }
+  return 0n;
+}
+
 export async function parseTorrentBuffer(buffer: Buffer) {
   let parsed: any;
   try {
@@ -34,7 +45,7 @@ export async function parseTorrentBuffer(buffer: Buffer) {
   return {
     infoHash: parsed.infoHash as string,
     name: (parsed.name as string) ?? "Unknown",
-    size: BigInt(Number(parsed.length ?? 0)),
+    size: torrentTotalLengthToBigInt(parsed.length),
     fileList,
     torrentFile: buffer,
   };

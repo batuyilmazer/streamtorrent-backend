@@ -1,4 +1,6 @@
 import { HttpError } from "../common/errors.js";
+import { env } from "../../config/env.js";
+import { maxTorrentBytes } from "../common/torrentLimits.js";
 import { getTorrentById, parseMagnetString, parseTorrentBuffer, upsertTorrent, } from "./torrents.service.js";
 function serializeTorrent(torrent) {
     return {
@@ -12,6 +14,10 @@ export async function upload(req, res) {
         throw HttpError.badRequest("No torrent file provided.");
     }
     const data = await parseTorrentBuffer(buffer);
+    const maxBytes = maxTorrentBytes();
+    if (data.size > maxBytes) {
+        throw HttpError.badRequest(`Torrent exceeds the ${env.torrent.maxSizeGb} GB size limit.`);
+    }
     const torrent = await upsertTorrent(data);
     res.status(201).json({ torrent: serializeTorrent(torrent) });
 }
