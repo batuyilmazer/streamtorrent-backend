@@ -3,13 +3,39 @@ import { sign2faToken, signAccessToken } from "./jwt.js";
 import { issueRefreshToken, verifyAndRotate, revokeActiveTokensForDevice, revokeByRaw, revokeAll, } from "./refresh.js";
 import { HttpError } from "../common/errors.js";
 import { MailSender } from "../../services/mail-service/mailSender.js";
-// deviceId ve refreshToken'ı direkt response body'sinde göndererek çözeceğiz. Mobilde cookie yok.
+import { env } from "../../config/env.js";
+const REFRESH_COOKIE = "refreshToken";
+const DEVICE_COOKIE = "deviceId";
+function cookieOptions() {
+    return {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+        maxAge: env.refresh.expireDays * 24 * 60 * 60 * 1000,
+    };
+}
+function setSessionCookies(res, refreshToken, deviceId) {
+    res.cookie(REFRESH_COOKIE, refreshToken, cookieOptions());
+    res.cookie(DEVICE_COOKIE, deviceId, cookieOptions());
+}
+function clearSessionCookies(res) {
+    const opts = {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+    };
+    res.clearCookie(REFRESH_COOKIE, opts);
+    res.clearCookie(DEVICE_COOKIE, opts);
+}
 export const register = async (req, res) => {
     const emailRaw = req.body.email;
     const passwordRaw = req.body.password;
     const { id, email } = await createUser(emailRaw, passwordRaw);
     const accessToken = signAccessToken(id);
     const { raw, deviceId } = await issueRefreshToken(id, req.headers["user-agent"], req.ip);
+    setSessionCookies(res, raw, deviceId);
     res.status(201).json({
         user: { id, email },
         access: accessToken,
@@ -28,6 +54,7 @@ export const login = async (req, res) => {
     if (deviceId)
         revokeActiveTokensForDevice(user.id, deviceId);
     const session = await issueRefreshToken(user.id, req.headers["user-agent"], req.ip, deviceId);
+    setSessionCookies(res, session.raw, session.deviceId);
     res.status(200).json({
         user: { userId: user.id, email: user.email },
         access: accessToken,
@@ -39,23 +66,32 @@ export const login = async (req, res) => {
     });
 };
 export const refresh = async (req, res) => {
-    const { refreshToken, deviceId } = req.body;
-    if (!refreshToken)
+    const { refreshToken, deviceId } = (req.body ?? {});
+    const refreshTokenFromCookie = req.cookies?.[REFRESH_COOKIE];
+    const deviceIdFromCookie = req.cookies?.[DEVICE_COOKIE];
+    const rawToken = refreshToken ?? refreshTokenFromCookie;
+    const resolvedDeviceId = deviceId ?? deviceIdFromCookie;
+    if (!rawToken)
         throw HttpError.badRequest("No refresh token provided.");
-    if (!deviceId)
+    if (!resolvedDeviceId)
         throw HttpError.badRequest("No deviceId provided.");
-    const { userId, newRaw } = await verifyAndRotate(refreshToken, deviceId, req.headers["user-agent"], req.ip);
+    const { userId, newRaw } = await verifyAndRotate(rawToken, resolvedDeviceId, req.headers["user-agent"], req.ip);
     const access = signAccessToken(userId);
+    setSessionCookies(res, newRaw, resolvedDeviceId);
     res.json({ newRaw, access });
 };
 export const logout = async (req, res) => {
-    const { refreshToken } = req.body;
-    await revokeByRaw(refreshToken);
+    const refreshToken = req.body?.refreshToken ?? req.cookies?.[REFRESH_COOKIE];
+    if (refreshToken) {
+        await revokeByRaw(refreshToken);
+    }
+    clearSessionCookies(res);
     res.status(200).json({ msg: "Logged out." });
 };
 export const logoutAll = async (req, res) => {
     const userId = req.user.id;
     await revokeAll(userId);
+    clearSessionCookies(res);
     res.status(200).json({ msg: "Logged out from all devices." });
 };
 export const twofa = async (req, res) => {

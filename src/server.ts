@@ -15,6 +15,8 @@ import {
   streamSessionRouter,
   streamVideoRouter,
 } from "./modules/stream/stream.routes.js";
+import userTorrentsRouter from "./modules/user-torrents/user-torrents.routes.js";
+import collectionsRouter from "./modules/collections/collections.routes.js";
 import { env } from "./config/env.js";
 
 const server = express();
@@ -55,6 +57,8 @@ server.use("/files", fileRouter);
 server.use("/api/torrents", torrentsRouter);
 server.use("/api/torrents", streamSessionRouter);
 server.use("/api/stream", streamVideoRouter);
+server.use("/api/user-torrents", userTorrentsRouter);
+server.use("/api/collections", collectionsRouter);
 
 server.use(notFoundHandler);
 server.use(globalErrorHandler);

@@ -92,9 +92,9 @@ export const resetUserPassword = async (
   newPassword: string
 ) => {
   const newRaw = await argon2.hash(newPassword);
-  const updatedUser = prisma.user.update({
+  const updatedUser = await prisma.user.update({
     where: { id: userId },
-    data: { passwordHash: newRaw },
+    data: { passwordHash: newRaw, passwordChangedAt: new Date() },
   });
   return updatedUser;
 };

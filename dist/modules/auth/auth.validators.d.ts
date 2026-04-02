@@ -9,11 +9,11 @@ export declare const loginSchema: z.ZodObject<{
     deviceId: z.ZodOptional<z.ZodUUID>;
 }, z.core.$strip>;
 export declare const refreshSchema: z.ZodObject<{
-    refreshToken: z.ZodString;
-    deviceId: z.ZodUUID;
+    refreshToken: z.ZodOptional<z.ZodString>;
+    deviceId: z.ZodOptional<z.ZodUUID>;
 }, z.core.$strip>;
 export declare const logoutSchema: z.ZodObject<{
-    refreshToken: z.ZodString;
+    refreshToken: z.ZodOptional<z.ZodString>;
 }, z.core.$strip>;
 export declare const twofaSchema: z.ZodObject<{
     scope: z.ZodEnum<{

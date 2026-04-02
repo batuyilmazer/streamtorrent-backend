@@ -9,11 +9,11 @@ export const loginSchema = z.object({
     deviceId: z.uuid().optional(),
 });
 export const refreshSchema = z.object({
-    refreshToken: z.string(),
-    deviceId: z.uuid(),
+    refreshToken: z.string().optional(),
+    deviceId: z.uuid().optional(),
 });
 export const logoutSchema = z.object({
-    refreshToken: z.string(),
+    refreshToken: z.string().optional(),
 });
 export const twofaSchema = z.object({
     scope: z.enum(["reset-password", "verify-email"]),

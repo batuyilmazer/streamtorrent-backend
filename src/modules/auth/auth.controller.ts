@@ -1,4 +1,4 @@
-import type { NextFunction, Request, Response } from "express";
+import type { Request, Response } from "express";
 import {
   createUser,
   getUserInfo,
@@ -16,8 +16,46 @@ import {
 } from "./refresh.js";
 import { HttpError } from "../common/errors.js";
 import { MailSender } from "../../services/mail-service/mailSender.js";
+import { env } from "../../config/env.js";
 
-// deviceId ve refreshToken'ı direkt response body'sinde göndererek çözeceğiz. Mobilde cookie yok.
+const REFRESH_COOKIE = "refreshToken";
+const DEVICE_COOKIE = "deviceId";
+
+function isSecureRequest(req: Request): boolean {
+  if (req.secure) return true;
+  const forwardedProto = req.headers["x-forwarded-proto"];
+  if (typeof forwardedProto === "string") {
+    return forwardedProto.split(",")[0]?.trim() === "https";
+  }
+  return false;
+}
+
+function cookieOptions(req: Request) {
+  return {
+    httpOnly: true,
+    secure: isSecureRequest(req),
+    sameSite: "lax" as const,
+    path: "/",
+    maxAge: env.refresh.expireDays * 24 * 60 * 60 * 1000,
+  };
+}
+
+function setSessionCookiesWithReq(req: Request, res: Response, refreshToken: string, deviceId: string) {
+  const opts = cookieOptions(req);
+  res.cookie(REFRESH_COOKIE, refreshToken, opts);
+  res.cookie(DEVICE_COOKIE, deviceId, opts);
+}
+
+function clearSessionCookies(req: Request, res: Response) {
+  const opts = {
+    httpOnly: true,
+    secure: isSecureRequest(req),
+    sameSite: "lax" as const,
+    path: "/",
+  };
+  res.clearCookie(REFRESH_COOKIE, opts);
+  res.clearCookie(DEVICE_COOKIE, opts);
+}
 
 export const register = async (req: Request, res: Response) => {
   const emailRaw = (req as any).body.email;
@@ -29,15 +67,10 @@ export const register = async (req: Request, res: Response) => {
     req.headers["user-agent"],
     req.ip
   );
+  setSessionCookiesWithReq(req, res, raw, deviceId);
   res.status(201).json({
     user: { id, email },
     access: accessToken,
-    session: {
-      refreshToken: raw,
-      deviceId,
-      userAgent: req.headers["user-agent"],
-      ip: req.ip,
-    },
   });
 };
 
@@ -45,48 +78,60 @@ export const login = async (req: Request, res: Response) => {
   const { email, password, deviceId } = (req as any).body;
   const user = await verifyUser(email, password);
   const accessToken = signAccessToken(user.id);
-  if (deviceId) revokeActiveTokensForDevice(user.id, deviceId);
+  if (deviceId) await revokeActiveTokensForDevice(user.id, deviceId);
   const session = await issueRefreshToken(
     user.id,
     req.headers["user-agent"],
     req.ip,
     deviceId
   );
+  setSessionCookiesWithReq(req, res, session.raw, session.deviceId);
 
   res.status(200).json({
     user: { userId: user.id, email: user.email },
     access: accessToken,
-    session: {
-      refreshToken: session.raw,
-      expiresAt: session.expiresAt,
-      deviceId: session.deviceId,
-    },
   });
 };
 
 export const refresh = async (req: Request, res: Response) => {
-  const { refreshToken, deviceId } = (req as any).body;
-  if (!refreshToken) throw HttpError.badRequest("No refresh token provided.");
-  if (!deviceId) throw HttpError.badRequest("No deviceId provided.");
+  const { refreshToken, deviceId } = ((req as any).body ?? {}) as {
+    refreshToken?: string;
+    deviceId?: string;
+  };
+  const refreshTokenFromCookie = (req as any).cookies?.[REFRESH_COOKIE] as
+    | string
+    | undefined;
+  const deviceIdFromCookie = (req as any).cookies?.[DEVICE_COOKIE] as
+    | string
+    | undefined;
+  const rawToken = refreshToken ?? refreshTokenFromCookie;
+  const resolvedDeviceId = deviceId ?? deviceIdFromCookie;
+  if (!rawToken) throw HttpError.badRequest("No refresh token provided.");
+  if (!resolvedDeviceId) throw HttpError.badRequest("No deviceId provided.");
   const { userId, newRaw } = await verifyAndRotate(
-    refreshToken,
-    deviceId,
+    rawToken,
+    resolvedDeviceId,
     req.headers["user-agent"] as string,
     req.ip
   );
   const access = signAccessToken(userId);
-  res.json({ newRaw, access });
+  setSessionCookiesWithReq(req, res, newRaw, resolvedDeviceId);
+  res.json({ access });
 };
 
 export const logout = async (req: Request, res: Response) => {
-  const { refreshToken } = (req as any).body;
-  await revokeByRaw(refreshToken);
+  const refreshToken = (req as any).body?.refreshToken ?? (req as any).cookies?.[REFRESH_COOKIE];
+  if (refreshToken) {
+    await revokeByRaw(refreshToken);
+  }
+  clearSessionCookies(req, res);
   res.status(200).json({ msg: "Logged out." });
 };
 
 export const logoutAll = async (req: Request, res: Response) => {
   const userId = (req as any).user.id;
   await revokeAll(userId);
+  clearSessionCookies(req, res);
   res.status(200).json({ msg: "Logged out from all devices." });
 };
 
