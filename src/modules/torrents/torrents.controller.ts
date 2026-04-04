@@ -8,6 +8,8 @@ import {
   parseTorrentBuffer,
   upsertTorrent,
 } from "./torrents.service.js";
+import type { MagnetInput } from "./torrents.validators.js";
+import { readBody } from "../common/requestContext.js";
 
 function serializeTorrent(torrent: Record<string, unknown>) {
   return {
@@ -34,7 +36,7 @@ export async function upload(req: Request, res: Response) {
 }
 
 export async function magnet(req: Request, res: Response) {
-  const { magnetUri } = (req as any).body;
+  const { magnetUri } = readBody<MagnetInput>(req);
   const data = await parseMagnetString(magnetUri);
   const torrent = await upsertTorrent(data);
   res.status(201).json({ torrent: serializeTorrent(torrent as Record<string, unknown>) });

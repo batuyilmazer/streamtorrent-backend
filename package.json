@@ -1,12 +1,14 @@
 {
-  "name": "backend-template",
+  "name": "streamtorrent-backend",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --test --import tsx",
+    "check": "npm run typecheck && npm run test",
     "start": "node dist/index.js",
     "prisma:mig": "prisma migrate dev",
     "prisma:gen": "prisma generate"

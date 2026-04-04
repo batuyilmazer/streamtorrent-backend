@@ -1,5 +1,21 @@
 import type { Request, Response } from "express";
 import * as collectionsService from "./collections.service.js";
+import {
+  readBody,
+  readParams,
+  requireUserId,
+} from "../common/requestContext.js";
+import type {
+  AddCollectionItemInput,
+  CollectionIdParams,
+  RemoveItemParams,
+} from "./collections.validators.js";
+
+function compactObject<T extends Record<string, unknown>>(value: T): Partial<T> {
+  return Object.fromEntries(
+    Object.entries(value).filter(([, field]) => field !== undefined),
+  ) as Partial<T>;
+}
 
 function serializeTorrent(obj: Record<string, unknown>) {
   return {
@@ -25,49 +41,64 @@ function serializeCollection(collection: Record<string, unknown>) {
 }
 
 export async function create(req: Request, res: Response) {
-  const userId = (req as any).user.id as string;
-  const collection = await collectionsService.createCollection(userId, req.body);
+  const userId = requireUserId(req);
+  const collection = await collectionsService.createCollection(
+    userId,
+    compactObject(readBody<Record<string, unknown>>(req)) as {
+      name: string;
+      description?: string;
+      isPublic?: boolean;
+    },
+  );
   res.status(201).json({ collection });
 }
 
 export async function list(req: Request, res: Response) {
-  const userId = (req as any).user.id as string;
+  const userId = requireUserId(req);
   const collections = await collectionsService.listByUser(userId);
   res.json({ collections });
 }
 
 export async function getById(req: Request, res: Response) {
-  const userId = (req as any).user?.id as string | undefined;
-  const id = req.params.id as string;
+  const userId = req.user?.id;
+  const { id } = readParams<CollectionIdParams>(req);
   const collection = await collectionsService.getById(id, userId);
   res.json({ collection: serializeCollection(collection as unknown as Record<string, unknown>) });
 }
 
 export async function update(req: Request, res: Response) {
-  const userId = (req as any).user.id as string;
-  const id = req.params.id as string;
-  const collection = await collectionsService.updateCollection(id, userId, req.body);
+  const userId = requireUserId(req);
+  const { id } = readParams<CollectionIdParams>(req);
+  const collection = await collectionsService.updateCollection(
+    id,
+    userId,
+    compactObject(readBody<Record<string, unknown>>(req)) as {
+      name?: string;
+      description?: string | null;
+      isPublic?: boolean;
+    },
+  );
   res.json({ collection });
 }
 
 export async function deleteCollection(req: Request, res: Response) {
-  const userId = (req as any).user.id as string;
-  const id = req.params.id as string;
+  const userId = requireUserId(req);
+  const { id } = readParams<CollectionIdParams>(req);
   await collectionsService.deleteCollection(id, userId);
   res.json({ msg: "Deleted." });
 }
 
 export async function addItem(req: Request, res: Response) {
-  const userId = (req as any).user.id as string;
-  const id = req.params.id as string;
-  const item = await collectionsService.addItem(id, userId, req.body.torrentId);
+  const userId = requireUserId(req);
+  const { id } = readParams<CollectionIdParams>(req);
+  const { torrentId } = readBody<AddCollectionItemInput>(req);
+  const item = await collectionsService.addItem(id, userId, torrentId);
   res.status(201).json({ item: serializeItem(item as unknown as Record<string, unknown>) });
 }
 
 export async function removeItem(req: Request, res: Response) {
-  const userId = (req as any).user.id as string;
-  const id = req.params.id as string;
-  const torrentId = req.params.torrentId as string;
+  const userId = requireUserId(req);
+  const { id, torrentId } = readParams<RemoveItemParams>(req);
   await collectionsService.removeItem(id, userId, torrentId);
   res.json({ msg: "Removed." });
 }

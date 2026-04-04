@@ -1,7 +1,8 @@
 import pino from "pino";
+import { env } from "./env.js";
 
 export const logger = pino({
-  level: process.env.LOG_LEVEL ?? (process.env.NODE_ENV === "production" ? "info" : "debug"),
+  level: env.logLevel ?? (env.nodeEnv === "production" ? "info" : "debug"),
   base: { service: "streamtorrent-backend" },
   timestamp: pino.stdTimeFunctions.isoTime,
 });

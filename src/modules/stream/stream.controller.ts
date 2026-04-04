@@ -16,6 +16,9 @@ import { logger } from "../../config/logger.js";
 import { env } from "../../config/env.js";
 import { maxTorrentBytes } from "../common/torrentLimits.js";
 
+type StreamSessionParams = { id: string };
+type StreamFileParams = { streamToken: string; fileIndex: string };
+
 interface FileEntry {
   path: string;
   size: number;
@@ -27,7 +30,7 @@ interface FileEntry {
 // For magnet-only torrents with unresolved metadata, activates the engine
 // and waits for peer metadata before returning.
 export const getStreamSession = asyncHandler(async (req: Request, res: Response) => {
-  const torrent = await getTorrentById((req as any).params.id);
+  const torrent = await getTorrentById((req as Request<StreamSessionParams>).params.id);
 
   let rawFiles = Array.isArray(torrent.fileList)
     ? (torrent.fileList as unknown as FileEntry[])
@@ -73,10 +76,7 @@ export const getStreamSession = asyncHandler(async (req: Request, res: Response)
 // Streams the requested file with Range request support.
 // Remuxes mkv/avi/mov → mp4 via FFmpeg (container swap only, no re-encode).
 export const streamFile = asyncHandler(async (req: Request, res: Response) => {
-  const { streamToken, fileIndex: fileIndexStr } = (req as any).params as {
-    streamToken: string;
-    fileIndex: string;
-  };
+  const { streamToken, fileIndex: fileIndexStr } = (req as Request<StreamFileParams>).params;
 
   const fileIndex = parseInt(fileIndexStr, 10);
   if (isNaN(fileIndex) || fileIndex < 0) {

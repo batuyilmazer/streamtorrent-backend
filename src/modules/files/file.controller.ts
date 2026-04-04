@@ -9,9 +9,15 @@ import {
 } from "./file.utils.js";
 import { env } from "../../config/env.js";
 import { HttpError } from "../common/errors.js";
+import {
+  readBody,
+  requireUserId,
+  readValidatedQuery,
+} from "../common/requestContext.js";
+import type { ConfirmUploadDto, GetDownloadUrlDto, InitUploadDto } from "./file.dto.js";
 
 export async function initUpload(req: Request, res: Response) {
-  const { fileName, mimeType, size, purpose, checksum } = (req as any).body;
+  const { fileName, mimeType, size, purpose, checksum } = readBody<InitUploadDto>(req);
   const folder = getFolderByPurpose(purpose);
 
   const now = new Date();
@@ -38,7 +44,7 @@ export async function initUpload(req: Request, res: Response) {
 }
 
 export async function confirmUpload(req: Request, res: Response) {
-  const { key, checksum } = (req as any).body;
+  const { key, checksum } = readBody<ConfirmUploadDto>(req);
 
   // 1. Verify file exists in S3 & Get Metadata (ETag, Size, Mime)
   const metadata = await storageService.checkExists(key);
@@ -78,7 +84,7 @@ export async function confirmUpload(req: Request, res: Response) {
       size: metadata.size,
       purpose,
       checksum: metadata.etag, // Store MD5/ETag as checksum
-      userId: (req as any).user.id,
+      userId: requireUserId(req),
     },
   });
 
@@ -89,8 +95,8 @@ export async function confirmUpload(req: Request, res: Response) {
 }
 
 export async function getDownloadUrl(req: Request, res: Response) {
-  const { key } = (req as any).query;
-  const userId = (req as any).user.id;
+  const { key } = readValidatedQuery<GetDownloadUrlDto>(req);
+  const userId = requireUserId(req);
 
   // Check if file exists in DB and is active
   const file = await prisma.file.findUnique({ where: { key, isActive: true } });
@@ -115,7 +121,7 @@ export async function deleteFile(req: Request, res: Response) {
   const { key } = req.params;
   if (!key) throw HttpError.badRequest("Key is required");
 
-  const userId = (req as any).user.id;
+  const userId = requireUserId(req);
 
   // Find file and verify ownership
   const file = await prisma.file.findUnique({ where: { key, isActive: true } });

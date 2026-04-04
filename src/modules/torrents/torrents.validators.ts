@@ -11,3 +11,4 @@ export const magnetSchema = z.object({
       message: "Must be a valid magnet URI.",
     }),
 });
+export type MagnetInput = z.infer<typeof magnetSchema>;
