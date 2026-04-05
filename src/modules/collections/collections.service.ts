@@ -1,9 +1,14 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/db.js";
 import { HttpError } from "../common/errors.js";
+import type {
+  CreateCollectionInput,
+  UpdateCollectionInput,
+} from "./collections.validators.js";
 
 export async function createCollection(
   userId: string,
-  data: { name: string; description?: string; isPublic?: boolean },
+  data: CreateCollectionInput,
 ) {
   return prisma.collection.create({
     data: {
@@ -53,10 +58,14 @@ async function verifyOwnership(id: string, userId: string) {
 export async function updateCollection(
   id: string,
   userId: string,
-  data: { name?: string; description?: string | null; isPublic?: boolean },
+  data: UpdateCollectionInput,
 ) {
   await verifyOwnership(id, userId);
-  return prisma.collection.update({ where: { id }, data });
+  const updateData: Prisma.CollectionUpdateInput = {};
+  if (data.name !== undefined) updateData.name = data.name;
+  if (data.description !== undefined) updateData.description = data.description;
+  if (data.isPublic !== undefined) updateData.isPublic = data.isPublic;
+  return prisma.collection.update({ where: { id }, data: updateData });
 }
 
 export async function deleteCollection(id: string, userId: string) {
@@ -77,10 +86,12 @@ export async function addItem(collectionId: string, userId: string, torrentId: s
     });
   } catch (err: any) {
     if (err.code === "P2002") {
-      return prisma.collectionItem.findUnique({
+      const existing = await prisma.collectionItem.findUnique({
         where: { collectionId_torrentId: { collectionId, torrentId } },
         include: { torrent: true },
       });
+      if (!existing) throw HttpError.notFound("Collection item not found.");
+      return existing;
     }
     throw err;
   }

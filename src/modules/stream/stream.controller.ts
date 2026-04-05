@@ -15,15 +15,13 @@ import {
 import { logger } from "../../config/logger.js";
 import { env } from "../../config/env.js";
 import { maxTorrentBytes } from "../common/torrentLimits.js";
+import {
+  serializeStreamSession,
+  serializeTorrentFileList,
+} from "../common/torrent.serializers.js";
 
 type StreamSessionParams = { id: string };
 type StreamFileParams = { streamToken: string; fileIndex: string };
-
-interface FileEntry {
-  path: string;
-  size: number;
-  index: number;
-}
 
 // GET /api/torrents/:id/stream
 // Returns a short-lived stream token + file list for the torrent.
@@ -32,9 +30,7 @@ interface FileEntry {
 export const getStreamSession = asyncHandler(async (req: Request, res: Response) => {
   const torrent = await getTorrentById((req as Request<StreamSessionParams>).params.id);
 
-  let rawFiles = Array.isArray(torrent.fileList)
-    ? (torrent.fileList as unknown as FileEntry[])
-    : [];
+  let rawFiles = serializeTorrentFileList(torrent.fileList);
 
   if (rawFiles.length === 0 && torrent.magnetUri) {
     const handle = await torrentEngine.getOrAdd(torrent.infoHash, torrent.magnetUri);
@@ -62,14 +58,7 @@ export const getStreamSession = asyncHandler(async (req: Request, res: Response)
   }
 
   const streamToken = mintStreamToken(torrent.id, torrent.infoHash);
-  const files = rawFiles.map((f) => ({
-    index: f.index,
-    name: f.path.split("/").pop() ?? f.path,
-    path: f.path,
-    size: f.size,
-  }));
-
-  res.json({ streamToken, files });
+  res.json(serializeStreamSession(streamToken, rawFiles));
 });
 
 // GET /api/stream/:streamToken/:fileIndex
@@ -86,9 +75,7 @@ export const streamFile = asyncHandler(async (req: Request, res: Response) => {
   const payload = verifyStreamToken(streamToken);
   const dbTorrent = await getTorrentById(payload.torrentId);
 
-  const streamFiles = Array.isArray(dbTorrent.fileList)
-    ? (dbTorrent.fileList as unknown as FileEntry[])
-    : [];
+  const streamFiles = serializeTorrentFileList(dbTorrent.fileList);
   if (streamFiles.length === 0) {
     throw HttpError.badRequest(
       "Torrent metadata is not ready yet. Request a stream session first to resolve the file list.",

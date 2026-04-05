@@ -15,6 +15,11 @@ import {
   readValidatedQuery,
 } from "../common/requestContext.js";
 import type { ConfirmUploadDto, GetDownloadUrlDto, InitUploadDto } from "./file.dto.js";
+import {
+  serializeConfirmUploadResponse,
+  serializeDownloadUrlResponse,
+  serializeInitUploadResponse,
+} from "../common/torrent.serializers.js";
 
 export async function initUpload(req: Request, res: Response) {
   const { fileName, mimeType, size, purpose, checksum } = readBody<InitUploadDto>(req);
@@ -37,10 +42,7 @@ export async function initUpload(req: Request, res: Response) {
     checksum,
   );
 
-  res.json({
-    url,
-    key: finalKey,
-  });
+  res.json(serializeInitUploadResponse(url, finalKey));
 }
 
 export async function confirmUpload(req: Request, res: Response) {
@@ -88,10 +90,7 @@ export async function confirmUpload(req: Request, res: Response) {
     },
   });
 
-  res.json({
-    file,
-    publicUrl: storageService.getPublicUrl(finalKey),
-  });
+  res.json(serializeConfirmUploadResponse(file, storageService.getPublicUrl(finalKey)));
 }
 
 export async function getDownloadUrl(req: Request, res: Response) {
@@ -111,10 +110,7 @@ export async function getDownloadUrl(req: Request, res: Response) {
 
   const url = await storageService.getPresignedDownloadUrl(key);
 
-  res.json({
-    url,
-    key,
-  });
+  res.json(serializeDownloadUrlResponse(url, key));
 }
 
 export async function deleteFile(req: Request, res: Response) {

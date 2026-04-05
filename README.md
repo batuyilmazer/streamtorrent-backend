@@ -42,3 +42,4 @@ npm run test
 - route modules should follow `routes -> controller -> service`
 - authenticated request state is typed through shared common helpers, not controller-local casts
 - `dist/` is generated output only
+- integration tests exercise auth refresh rotation and stream boundary behavior through real HTTP routes while mocking Prisma and torrent-engine seams

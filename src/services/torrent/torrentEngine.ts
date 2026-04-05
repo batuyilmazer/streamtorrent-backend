@@ -23,22 +23,11 @@ const DEFAULT_ANNOUNCE = [
 ];
 
 class TorrentEngine {
-  private client: WebTorrent;
+  private client: WebTorrent | null = null;
   private torrents: Map<string, TorrentHandle> = new Map();
   private pending: Map<string, Promise<TorrentHandle>> = new Map();
 
   constructor() {
-    this.client = new WebTorrent({
-      maxConns: 50,
-      utp: true,
-      dht: true,
-      tracker: true,
-    });
-
-    this.client.on("error", (err: Error) => {
-      logger.error({ err }, "[TorrentEngine] client error");
-    });
-
     const cleanupInterval = setInterval(() => {
       const threshold = Date.now() - 30 * 60 * 1000;
       for (const [hash, handle] of this.torrents) {
@@ -51,6 +40,23 @@ class TorrentEngine {
     }, 5 * 60 * 1000);
 
     cleanupInterval.unref();
+  }
+
+  private getClient(): WebTorrent {
+    if (this.client) return this.client;
+
+    this.client = new WebTorrent({
+      maxConns: 50,
+      utp: true,
+      dht: true,
+      tracker: true,
+    });
+
+    this.client.on("error", (err: Error) => {
+      logger.error({ err }, "[TorrentEngine] client error");
+    });
+
+    return this.client;
   }
 
   getOrAdd(infoHash: string, source?: string | Buffer): Promise<TorrentHandle> {
@@ -78,7 +84,7 @@ class TorrentEngine {
       logger.info({ infoHash, sourceType }, "[TorrentEngine] adding torrent");
 
       const input: string | Buffer = source ?? `magnet:?xt=urn:btih:${infoHash}`;
-      const torrent = this.client.add(input, { private: false, announce: DEFAULT_ANNOUNCE });
+      const torrent = this.getClient().add(input, { private: false, announce: DEFAULT_ANNOUNCE });
 
       // Log peer discovery progress every 10 seconds
       const progressInterval = setInterval(() => {
@@ -198,9 +204,11 @@ class TorrentEngine {
   remove(infoHash: string): Promise<void> {
     const handle = this.torrents.get(infoHash);
     if (!handle) return Promise.resolve();
+    const client = this.client;
+    if (!client) return Promise.resolve();
 
     return new Promise((resolve, reject) => {
-      this.client.remove(
+      client.remove(
         infoHash,
         { destroyStore: true },
         (err: Error | null) => {

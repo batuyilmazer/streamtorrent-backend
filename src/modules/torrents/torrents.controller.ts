@@ -10,13 +10,7 @@ import {
 } from "./torrents.service.js";
 import type { MagnetInput } from "./torrents.validators.js";
 import { readBody } from "../common/requestContext.js";
-
-function serializeTorrent(torrent: Record<string, unknown>) {
-  return {
-    ...torrent,
-    size: torrent.size !== undefined ? String(torrent.size) : torrent.size,
-  };
-}
+import { serializeTorrent } from "../common/torrent.serializers.js";
 
 export async function upload(req: Request, res: Response) {
   const buffer = req.body as Buffer;
@@ -32,18 +26,18 @@ export async function upload(req: Request, res: Response) {
     );
   }
   const torrent = await upsertTorrent(data);
-  res.status(201).json({ torrent: serializeTorrent(torrent as Record<string, unknown>) });
+  res.status(201).json({ torrent: serializeTorrent(torrent) });
 }
 
 export async function magnet(req: Request, res: Response) {
   const { magnetUri } = readBody<MagnetInput>(req);
   const data = await parseMagnetString(magnetUri);
   const torrent = await upsertTorrent(data);
-  res.status(201).json({ torrent: serializeTorrent(torrent as Record<string, unknown>) });
+  res.status(201).json({ torrent: serializeTorrent(torrent) });
 }
 
 export async function getById(req: Request, res: Response) {
   const id = req.params.id as string;
   const torrent = await getTorrentById(id);
-  res.json({ torrent: serializeTorrent(torrent as Record<string, unknown>) });
+  res.json({ torrent: serializeTorrent(torrent) });
 }

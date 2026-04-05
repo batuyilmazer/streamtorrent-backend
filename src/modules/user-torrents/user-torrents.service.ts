@@ -13,10 +13,12 @@ export async function saveTorrent(userId: string, torrentId: string) {
   } catch (err: any) {
     if (err.code === "P2002") {
       // Already saved — return existing record
-      return prisma.userTorrent.findUnique({
+      const existing = await prisma.userTorrent.findUnique({
         where: { userId_torrentId: { userId, torrentId } },
         include: { torrent: true },
       });
+      if (!existing) throw HttpError.notFound("Saved torrent record not found.");
+      return existing;
     }
     throw err;
   }
